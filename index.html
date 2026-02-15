@@ -6,12 +6,47 @@
   <title>SF Motorcycle Parking Finder</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-header: #16213e;
+      --bg-panel: #16213e;
+      --bg-input: #1a1a2e;
+      --bg-status: #111;
+      --border: #0f3460;
+      --text: #eee;
+      --text-muted: #aaa;
+      --text-placeholder: #666;
+      --accent: #e94560;
+      --accent-hover: #c73a52;
+      --secondary: #0f3460;
+      --secondary-hover: #1a4a7a;
+      --card-hover: #1a2744;
+      --tile-url: https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png;
+    }
+
+    [data-theme="light"] {
+      --bg: #f5f5f5;
+      --bg-header: #fff;
+      --bg-panel: #fff;
+      --bg-input: #fff;
+      --bg-status: #e8e8e8;
+      --border: #ddd;
+      --text: #222;
+      --text-muted: #666;
+      --text-placeholder: #999;
+      --accent: #d63851;
+      --accent-hover: #b82e44;
+      --secondary: #3a7bd5;
+      --secondary-hover: #2a5fa8;
+      --card-hover: #f0f4ff;
+    }
+
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: #1a1a2e;
-      color: #eee;
+      background: var(--bg);
+      color: var(--text);
       height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -20,41 +55,128 @@
 
     header {
       padding: 12px 16px;
-      background: #16213e;
-      border-bottom: 1px solid #0f3460;
+      background: var(--bg-header);
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
     }
 
     header h1 {
       font-size: 1.1rem;
       font-weight: 600;
-      color: #e94560;
-      margin-bottom: 8px;
+      color: var(--accent);
     }
+
+    .theme-toggle {
+      background: var(--secondary);
+      border: none;
+      color: #fff;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+
+    .theme-toggle:hover { background: var(--secondary-hover); }
 
     .search-row {
       display: flex;
       gap: 8px;
+      position: relative;
+    }
+
+    .search-wrapper {
+      flex: 1;
+      position: relative;
     }
 
     #search-input {
-      flex: 1;
+      width: 100%;
       padding: 10px 14px;
       border-radius: 8px;
-      border: 1px solid #0f3460;
-      background: #1a1a2e;
-      color: #eee;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text);
       font-size: 1rem;
       outline: none;
     }
 
-    #search-input:focus {
-      border-color: #e94560;
+    #search-input:focus { border-color: var(--accent); }
+    #search-input::placeholder { color: var(--text-placeholder); }
+
+    .autocomplete-list {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-top: none;
+      border-radius: 0 0 8px 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 2000;
+      display: none;
     }
 
-    #search-input::placeholder {
-      color: #666;
+    .autocomplete-list.show { display: block; }
+
+    .autocomplete-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
     }
+
+    .autocomplete-item:last-child { border-bottom: none; }
+    .autocomplete-item:hover,
+    .autocomplete-item.active { background: var(--card-hover); }
+
+    .filter-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      align-items: center;
+    }
+
+    .filter-row span {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .filter-btn.active {
+      border-color: transparent;
+      color: #fff;
+    }
+
+    .filter-btn[data-filter="all"].active { background: var(--accent); }
+    .filter-btn[data-filter="metered"].active { background: var(--accent); }
+    .filter-btn[data-filter="unmetered"].active { background: var(--secondary); }
 
     .btn {
       padding: 10px 18px;
@@ -67,19 +189,11 @@
       transition: background 0.15s;
     }
 
-    .btn-primary {
-      background: #e94560;
-      color: #fff;
-    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
 
-    .btn-primary:hover { background: #c73a52; }
-
-    .btn-locate {
-      background: #0f3460;
-      color: #eee;
-    }
-
-    .btn-locate:hover { background: #1a4a7a; }
+    .btn-locate { background: var(--secondary); color: #eee; }
+    .btn-locate:hover { background: var(--secondary-hover); }
 
     .main-content {
       flex: 1;
@@ -89,14 +203,11 @@
       position: relative;
     }
 
-    #map {
-      flex: 1;
-      min-height: 0;
-    }
+    #map { flex: 1; min-height: 0; }
 
     .results-panel {
-      background: #16213e;
-      border-top: 1px solid #0f3460;
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border);
       max-height: 45%;
       overflow-y: auto;
       flex-shrink: 0;
@@ -107,17 +218,17 @@
     .results-header {
       padding: 10px 16px;
       font-size: 0.85rem;
-      color: #aaa;
-      border-bottom: 1px solid #0f3460;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
       position: sticky;
       top: 0;
-      background: #16213e;
+      background: var(--bg-panel);
       z-index: 1;
     }
 
     .result-card {
       padding: 12px 16px;
-      border-bottom: 1px solid #0f3460;
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       gap: 12px;
@@ -125,8 +236,7 @@
       transition: background 0.12s;
     }
 
-    .result-card:hover { background: #1a2744; }
-    .result-card.active { background: #1a2744; }
+    .result-card:hover, .result-card.active { background: var(--card-hover); }
 
     .result-rank {
       width: 28px;
@@ -140,8 +250,8 @@
       flex-shrink: 0;
     }
 
-    .rank-metered { background: #e94560; color: #fff; }
-    .rank-unmetered { background: #0f3460; color: #fff; }
+    .rank-metered { background: var(--accent); color: #fff; }
+    .rank-unmetered { background: var(--secondary); color: #fff; }
 
     .result-info { flex: 1; min-width: 0; }
 
@@ -155,16 +265,22 @@
 
     .result-meta {
       font-size: 0.8rem;
-      color: #aaa;
+      color: var(--text-muted);
       margin-top: 2px;
     }
 
     .result-distance {
       font-size: 0.85rem;
       font-weight: 600;
-      color: #e94560;
+      color: var(--accent);
       flex-shrink: 0;
       text-align: right;
+    }
+
+    .cluster-badge {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 1px;
     }
 
     .nav-buttons {
@@ -201,26 +317,30 @@
       gap: 12px;
     }
 
+    [data-theme="light"] .loading-overlay {
+      background: rgba(245, 245, 245, 0.85);
+    }
+
     .loading-overlay.hidden { display: none; }
 
     .spinner {
       width: 36px;
       height: 36px;
-      border: 3px solid #0f3460;
-      border-top-color: #e94560;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .loading-text { font-size: 0.9rem; color: #aaa; }
+    .loading-text { font-size: 0.9rem; color: var(--text-muted); }
 
     .status-bar {
       padding: 8px 16px;
       font-size: 0.8rem;
-      color: #aaa;
-      background: #111;
+      color: var(--text-muted);
+      background: var(--bg-status);
       text-align: center;
       flex-shrink: 0;
     }
@@ -234,10 +354,9 @@
       margin-left: 4px;
     }
 
-    .tag-metered { background: #e94560; color: #fff; }
-    .tag-unmetered { background: #0f3460; color: #fff; }
+    .tag-metered { background: var(--accent); color: #fff; }
+    .tag-unmetered { background: var(--secondary); color: #fff; }
 
-    /* Custom Leaflet marker styling */
     .parking-marker {
       display: flex;
       align-items: center;
@@ -256,7 +375,47 @@
       justify-content: center;
     }
 
-    /* Mobile tweaks */
+    /* User location pulse */
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(3); opacity: 0; }
+    }
+
+    .user-location-marker {
+      position: relative;
+    }
+
+    .user-dot {
+      width: 16px;
+      height: 16px;
+      background: #4285f4;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(66,133,244,0.5);
+      position: relative;
+      z-index: 2;
+    }
+
+    .user-pulse {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 16px;
+      height: 16px;
+      margin: -8px 0 0 -8px;
+      background: rgba(66,133,244,0.3);
+      border-radius: 50%;
+      animation: pulse 2s ease-out infinite;
+      z-index: 1;
+    }
+
+    .user-accuracy {
+      position: absolute;
+      border-radius: 50%;
+      background: rgba(66,133,244,0.1);
+      border: 1px solid rgba(66,133,244,0.3);
+    }
+
     @media (max-width: 500px) {
       header h1 { font-size: 0.95rem; }
       #search-input { font-size: 0.9rem; padding: 8px 10px; }
@@ -268,11 +427,23 @@
 <body>
 
 <header>
-  <h1>SF Motorcycle Parking Finder</h1>
+  <div class="header-top">
+    <h1>SF Motorcycle Parking Finder</h1>
+    <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
+  </div>
   <div class="search-row">
-    <input type="text" id="search-input" placeholder="Enter an address or intersection in SF..." autocomplete="off" />
+    <div class="search-wrapper">
+      <input type="text" id="search-input" placeholder="Enter an address or intersection in SF..." autocomplete="off" />
+      <div class="autocomplete-list" id="autocomplete-list"></div>
+    </div>
     <button class="btn btn-primary" id="search-btn">Search</button>
     <button class="btn btn-locate" id="locate-btn" title="Use my location">GPS</button>
+  </div>
+  <div class="filter-row">
+    <span>Show:</span>
+    <button class="filter-btn active" data-filter="all">All</button>
+    <button class="filter-btn" data-filter="metered">Metered</button>
+    <button class="filter-btn" data-filter="unmetered">Unmetered</button>
   </div>
 </header>
 
@@ -295,15 +466,68 @@
   let allUnmetered = [];
   let dataLoaded = false;
   let searchMarker = null;
+  let userLocationMarker = null;
+  let userAccuracyCircle = null;
   let parkingMarkers = [];
+  let currentFilter = 'all';
+  let lastSearchLat = null;
+  let lastSearchLng = null;
+  let lastSearchIsGPS = false;
+  let autocompleteTimer = null;
+  let selectedAutocompleteIdx = -1;
+
+  // ── Theme ──
+  const savedTheme = localStorage.getItem('mc-park-theme') || 'dark';
+  if (savedTheme === 'light') document.documentElement.setAttribute('data-theme', 'light');
+
+  function isDark() {
+    return !document.documentElement.hasAttribute('data-theme');
+  }
+
+  const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+  const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 
   // ── Map setup ──
   const map = L.map('map', { zoomControl: true }).setView([37.775, -122.4194], 13);
 
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  let tileLayer = L.tileLayer(isDark() ? DARK_TILES : LIGHT_TILES, {
     attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
     maxZoom: 19
   }).addTo(map);
+
+  function updateThemeIcon() {
+    document.getElementById('theme-toggle').innerHTML = isDark() ? '&#9790;' : '&#9788;';
+  }
+  updateThemeIcon();
+
+  document.getElementById('theme-toggle').addEventListener('click', () => {
+    if (isDark()) {
+      document.documentElement.setAttribute('data-theme', 'light');
+      localStorage.setItem('mc-park-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('mc-park-theme', 'dark');
+    }
+    updateThemeIcon();
+    map.removeLayer(tileLayer);
+    tileLayer = L.tileLayer(isDark() ? DARK_TILES : LIGHT_TILES, {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      maxZoom: 19
+    }).addTo(map);
+  });
+
+  // ── Filter buttons ──
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      if (lastSearchLat !== null) {
+        const nearest = findNearest(lastSearchLat, lastSearchLng, 15);
+        showResults(lastSearchLat, lastSearchLng, nearest, lastSearchIsGPS);
+      }
+    });
+  });
 
   // ── Fetch parking data ──
   const METERED_URL = 'https://services.sfmta.com/arcgis/rest/services/Parking/parking/MapServer/6/query';
@@ -375,12 +599,10 @@
     showLoading(false);
   }
 
-  // Load data on page load
   loadData();
 
   // ── Geocoding via Nominatim ──
   async function geocode(query) {
-    // Append SF context if not already present
     const q = /san francisco|sf/i.test(query) ? query : `${query}, San Francisco, CA`;
     const params = new URLSearchParams({
       q,
@@ -397,9 +619,111 @@
     return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon), name: results[0].display_name };
   }
 
+  // ── Autocomplete via Nominatim ──
+  async function fetchSuggestions(query) {
+    if (query.length < 3) return [];
+    const q = /san francisco|sf/i.test(query) ? query : `${query}, San Francisco, CA`;
+    const params = new URLSearchParams({
+      q,
+      format: 'json',
+      limit: 5,
+      viewbox: '-122.52,37.81,-122.35,37.70',
+      bounded: 1,
+      addressdetails: 1
+    });
+    try {
+      const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+        headers: { 'User-Agent': 'SFMotorcycleParkingFinder/1.0' }
+      });
+      return await resp.json();
+    } catch {
+      return [];
+    }
+  }
+
+  function showAutocomplete(results) {
+    const list = document.getElementById('autocomplete-list');
+    if (results.length === 0) {
+      list.classList.remove('show');
+      return;
+    }
+    selectedAutocompleteIdx = -1;
+    list.innerHTML = results.map((r, i) => {
+      // Trim to a shorter display name
+      const parts = r.display_name.split(',');
+      const short = parts.slice(0, 3).join(',').trim();
+      return `<div class="autocomplete-item" data-idx="${i}" data-lat="${r.lat}" data-lon="${r.lon}" data-name="${r.display_name}">${short}</div>`;
+    }).join('');
+    list.classList.add('show');
+
+    list.querySelectorAll('.autocomplete-item').forEach(item => {
+      item.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        selectAutocompleteItem(item);
+      });
+    });
+  }
+
+  function selectAutocompleteItem(item) {
+    const lat = parseFloat(item.dataset.lat);
+    const lon = parseFloat(item.dataset.lon);
+    const parts = item.dataset.name.split(',');
+    document.getElementById('search-input').value = parts.slice(0, 2).join(',').trim();
+    document.getElementById('autocomplete-list').classList.remove('show');
+    performSearch(lat, lon, document.getElementById('search-input').value);
+  }
+
+  const searchInput = document.getElementById('search-input');
+
+  searchInput.addEventListener('input', () => {
+    clearTimeout(autocompleteTimer);
+    const val = searchInput.value.trim();
+    if (val.length < 3) {
+      document.getElementById('autocomplete-list').classList.remove('show');
+      return;
+    }
+    // Debounce 400ms to respect Nominatim rate limits
+    autocompleteTimer = setTimeout(async () => {
+      const results = await fetchSuggestions(val);
+      showAutocomplete(results);
+    }, 400);
+  });
+
+  searchInput.addEventListener('keydown', (e) => {
+    const list = document.getElementById('autocomplete-list');
+    const items = list.querySelectorAll('.autocomplete-item');
+    if (list.classList.contains('show') && items.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedAutocompleteIdx = Math.min(selectedAutocompleteIdx + 1, items.length - 1);
+        items.forEach((it, i) => it.classList.toggle('active', i === selectedAutocompleteIdx));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedAutocompleteIdx = Math.max(selectedAutocompleteIdx - 1, 0);
+        items.forEach((it, i) => it.classList.toggle('active', i === selectedAutocompleteIdx));
+        return;
+      }
+      if (e.key === 'Enter' && selectedAutocompleteIdx >= 0) {
+        e.preventDefault();
+        selectAutocompleteItem(items[selectedAutocompleteIdx]);
+        return;
+      }
+    }
+    if (e.key === 'Enter') {
+      list.classList.remove('show');
+      doSearch(searchInput.value);
+    }
+  });
+
+  searchInput.addEventListener('blur', () => {
+    setTimeout(() => document.getElementById('autocomplete-list').classList.remove('show'), 150);
+  });
+
   // ── Distance calculation (Haversine) ──
   function distanceMiles(lat1, lng1, lat2, lng2) {
-    const R = 3958.8; // miles
+    const R = 3958.8;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLng = (lng2 - lng1) * Math.PI / 180;
     const a = Math.sin(dLat/2) ** 2 +
@@ -412,28 +736,83 @@
     return distanceMiles(lat1, lng1, lat2, lng2) * 5280;
   }
 
-  // ── Format distance ──
   function formatDist(feet) {
     if (feet < 1000) return `${Math.round(feet)} ft`;
     return `${(feet / 5280).toFixed(2)} mi`;
   }
 
+  // ── Merge nearby spots ──
+  // Groups spots within ~50ft of each other into clusters
+  function mergeNearby(spots) {
+    const MERGE_RADIUS_FT = 50;
+    const used = new Set();
+    const clusters = [];
+
+    for (let i = 0; i < spots.length; i++) {
+      if (used.has(i)) continue;
+      const cluster = [spots[i]];
+      used.add(i);
+
+      for (let j = i + 1; j < spots.length; j++) {
+        if (used.has(j)) continue;
+        const d = distanceFeet(spots[i].lat, spots[i].lng, spots[j].lat, spots[j].lng);
+        if (d <= MERGE_RADIUS_FT) {
+          cluster.push(spots[j]);
+          used.add(j);
+        }
+      }
+
+      if (cluster.length === 1) {
+        clusters.push({ ...cluster[0], mergedCount: 1 });
+      } else {
+        // Use the closest spot as representative
+        const rep = cluster[0]; // already sorted by distance
+        const totalSpaces = cluster.reduce((s, c) => s + (c.spaces || 0), 0);
+        const types = [...new Set(cluster.map(c => c.type))];
+        clusters.push({
+          ...rep,
+          mergedCount: cluster.length,
+          mergedTypes: types,
+          spaces: totalSpaces || rep.spaces
+        });
+      }
+    }
+
+    return clusters;
+  }
+
   // ── Find nearest spots ──
-  function findNearest(lat, lng, count = 10) {
-    const all = [...allMetered, ...allUnmetered].map(spot => ({
+  function findNearest(lat, lng, count) {
+    let pool;
+    if (currentFilter === 'metered') {
+      pool = allMetered;
+    } else if (currentFilter === 'unmetered') {
+      pool = allUnmetered;
+    } else {
+      pool = [...allMetered, ...allUnmetered];
+    }
+
+    const withDist = pool.map(spot => ({
       ...spot,
       dist: distanceFeet(lat, lng, spot.lat, spot.lng)
     }));
-    all.sort((a, b) => a.dist - b.dist);
-    return all.slice(0, count);
+    withDist.sort((a, b) => a.dist - b.dist);
+
+    // Take more than needed, merge, then trim
+    const candidates = withDist.slice(0, count * 3);
+    const merged = mergeNearby(candidates);
+    return merged.slice(0, count);
   }
 
   // ── Create map markers ──
   function createParkingIcon(rank, type) {
-    const color = type === 'metered' ? '#e94560' : '#0f3460';
+    const color = type === 'metered' ? 'var(--accent)' : 'var(--secondary)';
+    const colorVal = type === 'metered'
+      ? (isDark() ? '#e94560' : '#d63851')
+      : (isDark() ? '#0f3460' : '#3a7bd5');
     return L.divIcon({
       className: 'parking-marker',
-      html: `<div style="width:26px;height:26px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${rank}</div>`,
+      html: `<div style="width:26px;height:26px;border-radius:50%;background:${colorVal};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${rank}</div>`,
       iconSize: [26, 26],
       iconAnchor: [13, 13]
     });
@@ -448,6 +827,15 @@
     });
   }
 
+  function createUserLocationIcon() {
+    return L.divIcon({
+      className: 'user-location-marker',
+      html: `<div class="user-pulse"></div><div class="user-dot"></div>`,
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+  }
+
   // ── Display results ──
   function clearResults() {
     parkingMarkers.forEach(m => map.removeLayer(m));
@@ -455,27 +843,39 @@
     if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
   }
 
-  function showResults(lat, lng, results) {
+  function showResults(lat, lng, results, isGPS) {
     clearResults();
 
-    // Search location marker
-    searchMarker = L.marker([lat, lng], { icon: createSearchIcon(), zIndex: 1000 })
-      .addTo(map)
-      .bindPopup('<b>Your location</b>');
+    // Location marker
+    if (isGPS) {
+      // For GPS, show a blue pulsing dot
+      if (userLocationMarker) map.removeLayer(userLocationMarker);
+      userLocationMarker = L.marker([lat, lng], { icon: createUserLocationIcon(), zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup('<b>You are here</b>');
+    } else {
+      // For search, show the green dot
+      searchMarker = L.marker([lat, lng], { icon: createSearchIcon(), zIndexOffset: 1000 })
+        .addTo(map)
+        .bindPopup('<b>Search location</b>');
+    }
 
     const bounds = L.latLngBounds([[lat, lng]]);
 
-    // Parking markers
     results.forEach((spot, i) => {
       const rank = i + 1;
       const marker = L.marker([spot.lat, spot.lng], {
         icon: createParkingIcon(rank, spot.type),
-        zIndex: 900 - i
+        zIndexOffset: 900 - i
       }).addTo(map);
 
-      const label = spot.type === 'metered'
-        ? `<b>#${rank} — ${spot.address}</b><br>${spot.signage}<br>${spot.meterType}<br>${formatDist(spot.dist)} away`
-        : `<b>#${rank} — ${spot.address}</b><br>${spot.location}<br>${spot.spaces} spaces<br>${formatDist(spot.dist)} away`;
+      let label;
+      const mergeNote = spot.mergedCount > 1 ? `<br><i>${spot.mergedCount} spots merged</i>` : '';
+      if (spot.type === 'metered') {
+        label = `<b>#${rank} — ${spot.address}</b><br>${spot.signage}<br>${spot.meterType}<br>${formatDist(spot.dist)} away${mergeNote}`;
+      } else {
+        label = `<b>#${rank} — ${spot.address}</b><br>${spot.location}<br>${spot.spaces} spaces<br>${formatDist(spot.dist)} away${mergeNote}`;
+      }
 
       marker.bindPopup(label);
       parkingMarkers.push(marker);
@@ -487,8 +887,10 @@
     // Results panel
     const panel = document.getElementById('results-panel');
     panel.classList.remove('hidden');
+
+    const filterLabel = currentFilter === 'all' ? '' : ` (${currentFilter})`;
     panel.innerHTML = `
-      <div class="results-header">${results.length} closest spots — <span class="tag tag-metered">M</span> Metered <span class="tag tag-unmetered">U</span> Unmetered</div>
+      <div class="results-header">${results.length} closest spots${filterLabel} — <span class="tag tag-metered">M</span> Metered <span class="tag tag-unmetered">U</span> Unmetered</div>
       ${results.map((spot, i) => {
         const rank = i + 1;
         const typeClass = spot.type === 'metered' ? 'rank-metered' : 'rank-unmetered';
@@ -503,6 +905,10 @@
           meta = [spot.location, spot.spaces ? `${spot.spaces} spaces` : ''].filter(Boolean).join(' · ');
         }
 
+        const mergeInfo = spot.mergedCount > 1
+          ? `<div class="cluster-badge">${spot.mergedCount} spots at this location</div>`
+          : '';
+
         const gUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}&travelmode=walking`;
         const aUrl = `https://maps.apple.com/?daddr=${spot.lat},${spot.lng}&dirflg=w`;
 
@@ -512,6 +918,7 @@
             <div class="result-info">
               <div class="result-address">${title} <span class="tag tag-${spot.type === 'metered' ? 'metered' : 'unmetered'}">${typeLabel}</span></div>
               <div class="result-meta">${meta}</div>
+              ${mergeInfo}
             </div>
             <div class="result-distance">${formatDist(spot.dist)}</div>
             <div class="nav-buttons">
@@ -523,7 +930,6 @@
       }).join('')}
     `;
 
-    // Click to fly to marker
     panel.querySelectorAll('.result-card').forEach(card => {
       card.addEventListener('click', () => {
         const idx = parseInt(card.dataset.idx);
@@ -535,6 +941,17 @@
   }
 
   // ── Search handler ──
+  async function performSearch(lat, lng, label) {
+    await loadData();
+    lastSearchLat = lat;
+    lastSearchLng = lng;
+    lastSearchIsGPS = false;
+    const nearest = findNearest(lat, lng, 15);
+    showResults(lat, lng, nearest, false);
+    setStatus(`Showing ${nearest.length} spots near "${label}"`);
+    showLoading(false);
+  }
+
   async function doSearch(query) {
     if (!query.trim()) return;
     showLoading(true);
@@ -546,8 +963,11 @@
       showLoading(false);
       return;
     }
-    const nearest = findNearest(loc.lat, loc.lng, 10);
-    showResults(loc.lat, loc.lng, nearest);
+    lastSearchLat = loc.lat;
+    lastSearchLng = loc.lng;
+    lastSearchIsGPS = false;
+    const nearest = findNearest(loc.lat, loc.lng, 15);
+    showResults(loc.lat, loc.lng, nearest, false);
     setStatus(`Showing ${nearest.length} spots near "${query}"`);
     showLoading(false);
   }
@@ -564,8 +984,11 @@
       await loadData();
       const lat = pos.coords.latitude;
       const lng = pos.coords.longitude;
-      const nearest = findNearest(lat, lng, 10);
-      showResults(lat, lng, nearest);
+      lastSearchLat = lat;
+      lastSearchLng = lng;
+      lastSearchIsGPS = true;
+      const nearest = findNearest(lat, lng, 15);
+      showResults(lat, lng, nearest, true);
       setStatus(`Showing ${nearest.length} spots near your location`);
       showLoading(false);
     }, (err) => {
@@ -586,11 +1009,8 @@
 
   // ── Event listeners ──
   document.getElementById('search-btn').addEventListener('click', () => {
+    document.getElementById('autocomplete-list').classList.remove('show');
     doSearch(document.getElementById('search-input').value);
-  });
-
-  document.getElementById('search-input').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') doSearch(e.target.value);
   });
 
   document.getElementById('locate-btn').addEventListener('click', doGPS);
