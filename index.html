@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SF Motorcycle Parking Finder</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 12px 16px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      flex-shrink: 0;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: #e94560;
+      margin-bottom: 8px;
+    }
+
+    .search-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    #search-input {
+      flex: 1;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #0f3460;
+      background: #1a1a2e;
+      color: #eee;
+      font-size: 1rem;
+      outline: none;
+    }
+
+    #search-input:focus {
+      border-color: #e94560;
+    }
+
+    #search-input::placeholder {
+      color: #666;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+    }
+
+    .btn-primary {
+      background: #e94560;
+      color: #fff;
+    }
+
+    .btn-primary:hover { background: #c73a52; }
+
+    .btn-locate {
+      background: #0f3460;
+      color: #eee;
+    }
+
+    .btn-locate:hover { background: #1a4a7a; }
+
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #map {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .results-panel {
+      background: #16213e;
+      border-top: 1px solid #0f3460;
+      max-height: 45%;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .results-panel.hidden { display: none; }
+
+    .results-header {
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      color: #aaa;
+      border-bottom: 1px solid #0f3460;
+      position: sticky;
+      top: 0;
+      background: #16213e;
+      z-index: 1;
+    }
+
+    .result-card {
+      padding: 12px 16px;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+
+    .result-card:hover { background: #1a2744; }
+    .result-card.active { background: #1a2744; }
+
+    .result-rank {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .rank-metered { background: #e94560; color: #fff; }
+    .rank-unmetered { background: #0f3460; color: #fff; }
+
+    .result-info { flex: 1; min-width: 0; }
+
+    .result-address {
+      font-weight: 600;
+      font-size: 0.95rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .result-meta {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-top: 2px;
+    }
+
+    .result-distance {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #e94560;
+      flex-shrink: 0;
+      text-align: right;
+    }
+
+    .nav-buttons {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .nav-btn {
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: none;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      color: #fff;
+    }
+
+    .nav-google { background: #4285f4; }
+    .nav-google:hover { background: #3367d6; }
+    .nav-apple { background: #333; }
+    .nav-apple:hover { background: #555; }
+
+    .loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(26, 26, 46, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .loading-overlay.hidden { display: none; }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid #0f3460;
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { font-size: 0.9rem; color: #aaa; }
+
+    .status-bar {
+      padding: 8px 16px;
+      font-size: 0.8rem;
+      color: #aaa;
+      background: #111;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      margin-left: 4px;
+    }
+
+    .tag-metered { background: #e94560; color: #fff; }
+    .tag-unmetered { background: #0f3460; color: #fff; }
+
+    /* Custom Leaflet marker styling */
+    .parking-marker {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 12px;
+      color: #fff;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    .search-marker-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 500px) {
+      header h1 { font-size: 0.95rem; }
+      #search-input { font-size: 0.9rem; padding: 8px 10px; }
+      .btn { padding: 8px 12px; font-size: 0.85rem; }
+      .result-card { padding: 10px 12px; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>SF Motorcycle Parking Finder</h1>
+  <div class="search-row">
+    <input type="text" id="search-input" placeholder="Enter an address or intersection in SF..." autocomplete="off" />
+    <button class="btn btn-primary" id="search-btn">Search</button>
+    <button class="btn btn-locate" id="locate-btn" title="Use my location">GPS</button>
+  </div>
+</header>
+
+<div class="main-content">
+  <div id="map"></div>
+  <div id="loading" class="loading-overlay hidden">
+    <div class="spinner"></div>
+    <div class="loading-text">Finding motorcycle parking...</div>
+  </div>
+  <div id="results-panel" class="results-panel hidden"></div>
+</div>
+
+<div class="status-bar" id="status-bar">Enter an address or use GPS to find nearby motorcycle parking</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function() {
+  // ── State ──
+  let allMetered = [];
+  let allUnmetered = [];
+  let dataLoaded = false;
+  let searchMarker = null;
+  let parkingMarkers = [];
+
+  // ── Map setup ──
+  const map = L.map('map', { zoomControl: true }).setView([37.775, -122.4194], 13);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  // ── Fetch parking data ──
+  const METERED_URL = 'https://services.sfmta.com/arcgis/rest/services/Parking/parking/MapServer/6/query';
+  const UNMETERED_URL = 'https://services.sfmta.com/arcgis/rest/services/Parking/parking/MapServer/5/query';
+
+  async function fetchAllFeatures(baseUrl, extraWhere) {
+    const features = [];
+    let offset = 0;
+    const batchSize = 1000;
+    while (true) {
+      const params = new URLSearchParams({
+        where: extraWhere || '1=1',
+        outFields: '*',
+        f: 'json',
+        resultRecordCount: batchSize,
+        resultOffset: offset,
+        outSR: '4326'
+      });
+      const resp = await fetch(`${baseUrl}?${params}`);
+      const data = await resp.json();
+      if (!data.features || data.features.length === 0) break;
+      features.push(...data.features);
+      if (!data.exceededTransferLimit) break;
+      offset += batchSize;
+    }
+    return features;
+  }
+
+  async function loadData() {
+    if (dataLoaded) return;
+    showLoading(true);
+    try {
+      const [metered, unmetered] = await Promise.all([
+        fetchAllFeatures(METERED_URL, "ACTIVE_METER_FLAG = 'M'"),
+        fetchAllFeatures(UNMETERED_URL)
+      ]);
+
+      allMetered = metered
+        .filter(f => f.geometry && f.geometry.x && f.geometry.y)
+        .map(f => ({
+          type: 'metered',
+          lat: f.geometry.y,
+          lng: f.geometry.x,
+          address: `${f.attributes.STREET_NUM || ''} ${f.attributes.STREET_NAME || ''}`.trim(),
+          signage: f.attributes.SIGNAGE || '',
+          meterType: f.attributes.METER_TYPE === 'SS' ? 'Single-space' : 'Multi-space',
+          capColor: f.attributes.CAP_COLOR || '',
+          postId: f.attributes.POST_ID || ''
+        }));
+
+      allUnmetered = unmetered
+        .filter(f => f.geometry && f.geometry.x && f.geometry.y)
+        .map(f => ({
+          type: 'unmetered',
+          lat: f.geometry.y,
+          lng: f.geometry.x,
+          address: f.attributes.STREET || '',
+          location: f.attributes.LOCATION_ || '',
+          spaces: f.attributes.Z_OF_UNMET || 0,
+          description: f.attributes.DESCRIPTIO || ''
+        }));
+
+      dataLoaded = true;
+      setStatus(`Loaded ${allMetered.length} metered + ${allUnmetered.length} unmetered parking spots`);
+    } catch (err) {
+      setStatus('Error loading parking data. Please try again.');
+      console.error(err);
+    }
+    showLoading(false);
+  }
+
+  // Load data on page load
+  loadData();
+
+  // ── Geocoding via Nominatim ──
+  async function geocode(query) {
+    // Append SF context if not already present
+    const q = /san francisco|sf/i.test(query) ? query : `${query}, San Francisco, CA`;
+    const params = new URLSearchParams({
+      q,
+      format: 'json',
+      limit: 1,
+      viewbox: '-122.52,37.81,-122.35,37.70',
+      bounded: 1
+    });
+    const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { 'User-Agent': 'SFMotorcycleParkingFinder/1.0' }
+    });
+    const results = await resp.json();
+    if (results.length === 0) return null;
+    return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon), name: results[0].display_name };
+  }
+
+  // ── Distance calculation (Haversine) ──
+  function distanceMiles(lat1, lng1, lat2, lng2) {
+    const R = 3958.8; // miles
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) ** 2 +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLng/2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function distanceFeet(lat1, lng1, lat2, lng2) {
+    return distanceMiles(lat1, lng1, lat2, lng2) * 5280;
+  }
+
+  // ── Format distance ──
+  function formatDist(feet) {
+    if (feet < 1000) return `${Math.round(feet)} ft`;
+    return `${(feet / 5280).toFixed(2)} mi`;
+  }
+
+  // ── Find nearest spots ──
+  function findNearest(lat, lng, count = 10) {
+    const all = [...allMetered, ...allUnmetered].map(spot => ({
+      ...spot,
+      dist: distanceFeet(lat, lng, spot.lat, spot.lng)
+    }));
+    all.sort((a, b) => a.dist - b.dist);
+    return all.slice(0, count);
+  }
+
+  // ── Create map markers ──
+  function createParkingIcon(rank, type) {
+    const color = type === 'metered' ? '#e94560' : '#0f3460';
+    return L.divIcon({
+      className: 'parking-marker',
+      html: `<div style="width:26px;height:26px;border-radius:50%;background:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#fff;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.4)">${rank}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+  }
+
+  function createSearchIcon() {
+    return L.divIcon({
+      className: 'search-marker-icon',
+      html: `<div style="width:18px;height:18px;border-radius:50%;background:#00e676;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.5)"></div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9]
+    });
+  }
+
+  // ── Display results ──
+  function clearResults() {
+    parkingMarkers.forEach(m => map.removeLayer(m));
+    parkingMarkers = [];
+    if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
+  }
+
+  function showResults(lat, lng, results) {
+    clearResults();
+
+    // Search location marker
+    searchMarker = L.marker([lat, lng], { icon: createSearchIcon(), zIndex: 1000 })
+      .addTo(map)
+      .bindPopup('<b>Your location</b>');
+
+    const bounds = L.latLngBounds([[lat, lng]]);
+
+    // Parking markers
+    results.forEach((spot, i) => {
+      const rank = i + 1;
+      const marker = L.marker([spot.lat, spot.lng], {
+        icon: createParkingIcon(rank, spot.type),
+        zIndex: 900 - i
+      }).addTo(map);
+
+      const label = spot.type === 'metered'
+        ? `<b>#${rank} — ${spot.address}</b><br>${spot.signage}<br>${spot.meterType}<br>${formatDist(spot.dist)} away`
+        : `<b>#${rank} — ${spot.address}</b><br>${spot.location}<br>${spot.spaces} spaces<br>${formatDist(spot.dist)} away`;
+
+      marker.bindPopup(label);
+      parkingMarkers.push(marker);
+      bounds.extend([spot.lat, spot.lng]);
+    });
+
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+
+    // Results panel
+    const panel = document.getElementById('results-panel');
+    panel.classList.remove('hidden');
+    panel.innerHTML = `
+      <div class="results-header">${results.length} closest spots — <span class="tag tag-metered">M</span> Metered <span class="tag tag-unmetered">U</span> Unmetered</div>
+      ${results.map((spot, i) => {
+        const rank = i + 1;
+        const typeClass = spot.type === 'metered' ? 'rank-metered' : 'rank-unmetered';
+        const typeLabel = spot.type === 'metered' ? 'Metered' : 'Unmetered';
+
+        let title, meta;
+        if (spot.type === 'metered') {
+          title = spot.address || 'Metered spot';
+          meta = [spot.signage, spot.meterType].filter(Boolean).join(' · ');
+        } else {
+          title = spot.address || 'Unmetered spot';
+          meta = [spot.location, spot.spaces ? `${spot.spaces} spaces` : ''].filter(Boolean).join(' · ');
+        }
+
+        const gUrl = `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}&travelmode=walking`;
+        const aUrl = `https://maps.apple.com/?daddr=${spot.lat},${spot.lng}&dirflg=w`;
+
+        return `
+          <div class="result-card" data-idx="${i}">
+            <div class="result-rank ${typeClass}">${rank}</div>
+            <div class="result-info">
+              <div class="result-address">${title} <span class="tag tag-${spot.type === 'metered' ? 'metered' : 'unmetered'}">${typeLabel}</span></div>
+              <div class="result-meta">${meta}</div>
+            </div>
+            <div class="result-distance">${formatDist(spot.dist)}</div>
+            <div class="nav-buttons">
+              <a href="${gUrl}" target="_blank" rel="noopener" class="nav-btn nav-google" onclick="event.stopPropagation()">Google</a>
+              <a href="${aUrl}" target="_blank" rel="noopener" class="nav-btn nav-apple" onclick="event.stopPropagation()">Apple</a>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    `;
+
+    // Click to fly to marker
+    panel.querySelectorAll('.result-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const idx = parseInt(card.dataset.idx);
+        const spot = results[idx];
+        map.flyTo([spot.lat, spot.lng], 17, { duration: 0.5 });
+        parkingMarkers[idx].openPopup();
+      });
+    });
+  }
+
+  // ── Search handler ──
+  async function doSearch(query) {
+    if (!query.trim()) return;
+    showLoading(true);
+    setStatus('Searching...');
+    await loadData();
+    const loc = await geocode(query);
+    if (!loc) {
+      setStatus('Location not found. Try a different address.');
+      showLoading(false);
+      return;
+    }
+    const nearest = findNearest(loc.lat, loc.lng, 10);
+    showResults(loc.lat, loc.lng, nearest);
+    setStatus(`Showing ${nearest.length} spots near "${query}"`);
+    showLoading(false);
+  }
+
+  // ── GPS handler ──
+  async function doGPS() {
+    if (!navigator.geolocation) {
+      setStatus('Geolocation not supported by your browser.');
+      return;
+    }
+    showLoading(true);
+    setStatus('Getting your location...');
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      await loadData();
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      const nearest = findNearest(lat, lng, 10);
+      showResults(lat, lng, nearest);
+      setStatus(`Showing ${nearest.length} spots near your location`);
+      showLoading(false);
+    }, (err) => {
+      setStatus('Could not get your location. Please allow location access.');
+      showLoading(false);
+      console.error(err);
+    }, { enableHighAccuracy: true, timeout: 10000 });
+  }
+
+  // ── UI helpers ──
+  function showLoading(show) {
+    document.getElementById('loading').classList.toggle('hidden', !show);
+  }
+
+  function setStatus(msg) {
+    document.getElementById('status-bar').textContent = msg;
+  }
+
+  // ── Event listeners ──
+  document.getElementById('search-btn').addEventListener('click', () => {
+    doSearch(document.getElementById('search-input').value);
+  });
+
+  document.getElementById('search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSearch(e.target.value);
+  });
+
+  document.getElementById('locate-btn').addEventListener('click', doGPS);
+
+})();
+</script>
+</body>
+</html>
