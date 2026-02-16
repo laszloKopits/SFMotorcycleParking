@@ -94,15 +94,10 @@
     .search-row {
       display: flex;
       gap: 8px;
-      position: relative;
-    }
-
-    .search-wrapper {
-      flex: 1;
-      position: relative;
     }
 
     #search-input {
+      flex: 1;
       width: 100%;
       padding: 10px 14px;
       border-radius: 8px;
@@ -115,35 +110,6 @@
 
     #search-input:focus { border-color: var(--accent); }
     #search-input::placeholder { color: var(--text-placeholder); }
-
-    .autocomplete-list {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: var(--bg-panel);
-      border: 1px solid var(--border);
-      border-top: none;
-      border-radius: 0 0 8px 8px;
-      max-height: 200px;
-      overflow-y: auto;
-      z-index: 2000;
-      display: none;
-    }
-
-    .autocomplete-list.show { display: block; }
-
-    .autocomplete-item {
-      padding: 10px 14px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      border-bottom: 1px solid var(--border);
-      color: var(--text);
-    }
-
-    .autocomplete-item:last-child { border-bottom: none; }
-    .autocomplete-item:hover,
-    .autocomplete-item.active { background: var(--card-hover); }
 
     .filter-row {
       display: flex;
@@ -432,12 +398,9 @@
     <button class="theme-toggle" id="theme-toggle" title="Toggle light/dark mode">&#9790;</button>
   </div>
   <div class="search-row">
-    <div class="search-wrapper">
-      <input type="text" id="search-input" placeholder="Enter an address or intersection in SF..." autocomplete="off" />
-      <div class="autocomplete-list" id="autocomplete-list"></div>
-    </div>
+    <input type="text" id="search-input" placeholder="Enter an address or intersection in SF..." autocomplete="off" />
     <button class="btn btn-primary" id="search-btn">Search</button>
-    <button class="btn btn-locate" id="locate-btn" title="Use my location">GPS</button>
+    <button class="btn btn-locate" id="locate-btn" title="Use my location">Spots Near Me</button>
   </div>
   <div class="filter-row">
     <span>Show:</span>
@@ -467,14 +430,12 @@
   let dataLoaded = false;
   let searchMarker = null;
   let userLocationMarker = null;
-  let userAccuracyCircle = null;
   let parkingMarkers = [];
   let currentFilter = 'all';
   let lastSearchLat = null;
   let lastSearchLng = null;
   let lastSearchIsGPS = false;
-  let autocompleteTimer = null;
-  let selectedAutocompleteIdx = -1;
+  let lastSearchLabel = '';
 
   // ── Theme ──
   const savedTheme = localStorage.getItem('mc-park-theme') || 'dark';
@@ -524,7 +485,9 @@
       currentFilter = btn.dataset.filter;
       if (lastSearchLat !== null) {
         const nearest = findNearest(lastSearchLat, lastSearchLng, 15);
-        showResults(lastSearchLat, lastSearchLng, nearest, lastSearchIsGPS);
+        showResults(lastSearchLat, lastSearchLng, nearest, lastSearchIsGPS, lastSearchLabel);
+      } else if (dataLoaded) {
+        showAllSpots();
       }
     });
   });
@@ -592,11 +555,60 @@
 
       dataLoaded = true;
       setStatus(`Loaded ${allMetered.length} metered + ${allUnmetered.length} unmetered parking spots`);
+      showAllSpots();
     } catch (err) {
       setStatus('Error loading parking data. Please try again.');
       console.error(err);
     }
     showLoading(false);
+  }
+
+  // ── Show all spots on map (initial view) ──
+  function showAllSpots() {
+    clearResults();
+    document.getElementById('results-panel').classList.add('hidden');
+
+    let pool;
+    if (currentFilter === 'metered') {
+      pool = allMetered;
+    } else if (currentFilter === 'unmetered') {
+      pool = allUnmetered;
+    } else {
+      pool = [...allMetered, ...allUnmetered];
+    }
+
+    const bounds = L.latLngBounds();
+
+    pool.forEach(spot => {
+      const colorVal = spot.type === 'metered'
+        ? (isDark() ? '#e94560' : '#d63851')
+        : (isDark() ? '#0f3460' : '#3a7bd5');
+      const icon = L.divIcon({
+        className: 'parking-marker',
+        html: `<div style="width:10px;height:10px;border-radius:50%;background:${colorVal};border:1px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>`,
+        iconSize: [10, 10],
+        iconAnchor: [5, 5]
+      });
+
+      const marker = L.marker([spot.lat, spot.lng], { icon }).addTo(map);
+
+      let label;
+      if (spot.type === 'metered') {
+        label = `<b>${spot.address}</b><br>${spot.signage}<br>${spot.meterType}`;
+      } else {
+        label = `<b>${spot.address}</b><br>${spot.location}<br>${spot.spaces} spaces`;
+      }
+      marker.bindPopup(label);
+      parkingMarkers.push(marker);
+      bounds.extend([spot.lat, spot.lng]);
+    });
+
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [20, 20] });
+    }
+
+    const filterLabel = currentFilter === 'all' ? '' : ` ${currentFilter}`;
+    setStatus(`Showing all ${pool.length}${filterLabel} motorcycle parking spots in SF`);
   }
 
   loadData();
@@ -619,106 +631,12 @@
     return { lat: parseFloat(results[0].lat), lng: parseFloat(results[0].lon), name: results[0].display_name };
   }
 
-  // ── Autocomplete via Nominatim ──
-  async function fetchSuggestions(query) {
-    if (query.length < 3) return [];
-    const q = /san francisco|sf/i.test(query) ? query : `${query}, San Francisco, CA`;
-    const params = new URLSearchParams({
-      q,
-      format: 'json',
-      limit: 5,
-      viewbox: '-122.52,37.81,-122.35,37.70',
-      bounded: 1,
-      addressdetails: 1
-    });
-    try {
-      const resp = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
-        headers: { 'User-Agent': 'SFMotorcycleParkingFinder/1.0' }
-      });
-      return await resp.json();
-    } catch {
-      return [];
-    }
-  }
-
-  function showAutocomplete(results) {
-    const list = document.getElementById('autocomplete-list');
-    if (results.length === 0) {
-      list.classList.remove('show');
-      return;
-    }
-    selectedAutocompleteIdx = -1;
-    list.innerHTML = results.map((r, i) => {
-      // Trim to a shorter display name
-      const parts = r.display_name.split(',');
-      const short = parts.slice(0, 3).join(',').trim();
-      return `<div class="autocomplete-item" data-idx="${i}" data-lat="${r.lat}" data-lon="${r.lon}" data-name="${r.display_name}">${short}</div>`;
-    }).join('');
-    list.classList.add('show');
-
-    list.querySelectorAll('.autocomplete-item').forEach(item => {
-      item.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        selectAutocompleteItem(item);
-      });
-    });
-  }
-
-  function selectAutocompleteItem(item) {
-    const lat = parseFloat(item.dataset.lat);
-    const lon = parseFloat(item.dataset.lon);
-    const parts = item.dataset.name.split(',');
-    document.getElementById('search-input').value = parts.slice(0, 2).join(',').trim();
-    document.getElementById('autocomplete-list').classList.remove('show');
-    performSearch(lat, lon, document.getElementById('search-input').value);
-  }
-
   const searchInput = document.getElementById('search-input');
 
-  searchInput.addEventListener('input', () => {
-    clearTimeout(autocompleteTimer);
-    const val = searchInput.value.trim();
-    if (val.length < 3) {
-      document.getElementById('autocomplete-list').classList.remove('show');
-      return;
-    }
-    // Debounce 400ms to respect Nominatim rate limits
-    autocompleteTimer = setTimeout(async () => {
-      const results = await fetchSuggestions(val);
-      showAutocomplete(results);
-    }, 400);
-  });
-
   searchInput.addEventListener('keydown', (e) => {
-    const list = document.getElementById('autocomplete-list');
-    const items = list.querySelectorAll('.autocomplete-item');
-    if (list.classList.contains('show') && items.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        selectedAutocompleteIdx = Math.min(selectedAutocompleteIdx + 1, items.length - 1);
-        items.forEach((it, i) => it.classList.toggle('active', i === selectedAutocompleteIdx));
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        selectedAutocompleteIdx = Math.max(selectedAutocompleteIdx - 1, 0);
-        items.forEach((it, i) => it.classList.toggle('active', i === selectedAutocompleteIdx));
-        return;
-      }
-      if (e.key === 'Enter' && selectedAutocompleteIdx >= 0) {
-        e.preventDefault();
-        selectAutocompleteItem(items[selectedAutocompleteIdx]);
-        return;
-      }
-    }
     if (e.key === 'Enter') {
-      list.classList.remove('show');
       doSearch(searchInput.value);
     }
-  });
-
-  searchInput.addEventListener('blur', () => {
-    setTimeout(() => document.getElementById('autocomplete-list').classList.remove('show'), 150);
   });
 
   // ── Distance calculation (Haversine) ──
@@ -843,7 +761,7 @@
     if (searchMarker) { map.removeLayer(searchMarker); searchMarker = null; }
   }
 
-  function showResults(lat, lng, results, isGPS) {
+  function showResults(lat, lng, results, isGPS, locationLabel) {
     clearResults();
 
     // Location marker
@@ -857,7 +775,7 @@
       // For search, show the green dot
       searchMarker = L.marker([lat, lng], { icon: createSearchIcon(), zIndexOffset: 1000 })
         .addTo(map)
-        .bindPopup('<b>Search location</b>');
+        .bindPopup(`<b>${locationLabel}</b>`);
     }
 
     const bounds = L.latLngBounds([[lat, lng]]);
@@ -888,9 +806,10 @@
     const panel = document.getElementById('results-panel');
     panel.classList.remove('hidden');
 
-    const filterLabel = currentFilter === 'all' ? '' : ` (${currentFilter})`;
+    const nearLabel = isGPS ? 'near me' : `near ${locationLabel}`;
+    const filterLabel = currentFilter === 'all' ? '' : ` ${currentFilter}`;
     panel.innerHTML = `
-      <div class="results-header">${results.length} closest spots${filterLabel} — <span class="tag tag-metered">M</span> Metered <span class="tag tag-unmetered">U</span> Unmetered</div>
+      <div class="results-header">${results.length}${filterLabel} spots ${nearLabel} — <span class="tag tag-metered">M</span> Metered <span class="tag tag-unmetered">U</span> Unmetered</div>
       ${results.map((spot, i) => {
         const rank = i + 1;
         const typeClass = spot.type === 'metered' ? 'rank-metered' : 'rank-unmetered';
@@ -941,15 +860,16 @@
   }
 
   // ── Search handler ──
-  async function performSearch(lat, lng, label) {
-    await loadData();
-    lastSearchLat = lat;
-    lastSearchLng = lng;
-    lastSearchIsGPS = false;
-    const nearest = findNearest(lat, lng, 15);
-    showResults(lat, lng, nearest, false);
-    setStatus(`Showing ${nearest.length} spots near "${label}"`);
-    showLoading(false);
+  // Extract a short, clean address from Nominatim's display_name
+  function shortAddress(displayName) {
+    const parts = displayName.split(',').map(s => s.trim());
+    // Typically: "1600 Sacramento Street, Nob Hill, San Francisco, ..."
+    // Take first 1-2 meaningful parts before "San Francisco"
+    const sfIdx = parts.findIndex(p => /san francisco/i.test(p));
+    if (sfIdx > 0) {
+      return parts.slice(0, Math.min(sfIdx, 2)).join(', ');
+    }
+    return parts.slice(0, 2).join(', ');
   }
 
   async function doSearch(query) {
@@ -963,12 +883,14 @@
       showLoading(false);
       return;
     }
+    const label = shortAddress(loc.name);
     lastSearchLat = loc.lat;
     lastSearchLng = loc.lng;
     lastSearchIsGPS = false;
+    lastSearchLabel = label;
     const nearest = findNearest(loc.lat, loc.lng, 15);
-    showResults(loc.lat, loc.lng, nearest, false);
-    setStatus(`Showing ${nearest.length} spots near "${query}"`);
+    showResults(loc.lat, loc.lng, nearest, false, label);
+    setStatus(`Spots near ${label}`);
     showLoading(false);
   }
 
@@ -987,9 +909,10 @@
       lastSearchLat = lat;
       lastSearchLng = lng;
       lastSearchIsGPS = true;
+      lastSearchLabel = 'near me';
       const nearest = findNearest(lat, lng, 15);
-      showResults(lat, lng, nearest, true);
-      setStatus(`Showing ${nearest.length} spots near your location`);
+      showResults(lat, lng, nearest, true, 'near me');
+      setStatus(`Spots near me`);
       showLoading(false);
     }, (err) => {
       setStatus('Could not get your location. Please allow location access.');
@@ -1009,7 +932,6 @@
 
   // ── Event listeners ──
   document.getElementById('search-btn').addEventListener('click', () => {
-    document.getElementById('autocomplete-list').classList.remove('show');
     doSearch(document.getElementById('search-input').value);
   });
 
