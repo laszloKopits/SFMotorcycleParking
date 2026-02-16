@@ -800,7 +800,8 @@
       bounds.extend([spot.lat, spot.lng]);
     });
 
-    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    // Center on search location, zoom to show nearby results but stay centered
+    map.setView([lat, lng], 16, { animate: true });
 
     // Results panel
     const panel = document.getElementById('results-panel');
